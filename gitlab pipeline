@@ -1,0 +1,32 @@
+#pipeline success SonaType nexus 
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+  IMAGE_NAME: 192.168.0.114:5000/javid-project/my-nexus-image
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+
+  NEXUS_USER: "admin"
+  NEXUS_PASSWORD: "1234"
+
+build_and_push:
+  image: docker:24.0.7
+  stage: build
+  services:
+    - name: docker:24.0.7-dind
+      command: ["--insecure-registry=192.168.0.114:5000"]
+  before_script:
+    - echo "$NEXUS_PASSWORD" | docker login 192.168.0.114:5000 --username "$NEXUS_USER" --password-stdin
+  script:
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG -t $IMAGE_NAME:latest .
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+    - docker push $IMAGE_NAME:latest
+
+deploy:
+  image: alpine:latest
+  stage: deploy
+  script:
+    - echo "Deploy step"
