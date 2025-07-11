@@ -1,0 +1,82 @@
+#yeni project 12
+stages:
+    - stage_build
+    - stage_test
+    - stage_deploy_dev
+    - stage_deploy_prd    
+    - stage_finish
+
+variables:
+    OWNER_NAME   : Javid Mamedov
+    CICD_VERSION : v1.0
+    LOG_FILE_NAME: $CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA.txt
+
+image: alpine:latest
+
+default:
+    artifacts:
+        paths:
+            - $LOG_FILE_NAME
+
+
+build_job:
+    stage: stage_build
+    script:
+        - echo "---Build Started---"
+        - echo "Building..." >> $LOG_FILE_NAME
+        - echo "---Build Completed---"
+
+
+test_job1:
+    stage: stage_test
+    script:
+        - echo "---Test1 Started---"
+        - echo "Testing1..." >> $LOG_FILE_NAME
+        - echo "---Test1 Completed---"    
+
+
+test_job2:
+    stage: stage_test
+    script:
+        - echo "---Test2 Started---"
+        - echo "Testing2..." >> $LOG_FILE_NAME
+        - echo "---Test2 Completed---"      
+
+
+test_job3:
+    stage: stage_test
+    needs: [test_job1, test_job2]
+    script:
+        - echo "---Test3 Started---"
+        - echo "Testing3 FINAL..." >> $LOG_FILE_NAME
+        - echo "---Test3 Completed---"      
+        
+
+deploy_to_dev_job:
+    stage: stage_deploy_dev
+    rules:
+        - if: $CI_COMMIT_BRANCH == "dev"
+    script:
+        - echo "---Deploy to DEV Started---"
+        - echo "Deploy to DEV..." >> $LOG_FILE_NAME
+        - echo "---Deploy to DEV Completed---"    
+
+
+deploy_to_prd_job:
+    stage: stage_deploy_prd
+    rules:
+        - if: $CI_COMMIT_BRANCH == "main"    
+    script:
+        - echo "---Deploy to PROD Started---"
+        - echo "Deploy to PROD..." >> $LOG_FILE_NAME
+        - echo "---Deploy to PROD Completed---"    
+
+finish_job:
+    stage : stage_finish
+    script:
+        - echo "---Finish Job Started---"
+        - echo "Finish!!!" >> $LOG_FILE_NAME
+        - echo "Owner of the Pipeline $CICD_VERSION is $OWNER_NAME" >> $LOG_FILE_NAME
+        - cat $LOG_FILE_NAME
+        - ls -l
+        - echo "---Finish Job Completed---" 
