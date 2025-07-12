@@ -30,3 +30,32 @@ deploy:
   stage: deploy
   script:
     - echo "Deploy step"
+
+
+
+
+
+
+#pipeline5
+stages:
+  - build
+
+build_and_push:
+  image: docker:24.0.7
+  stage: build
+  tags:
+    - docker
+  services:
+    - name: docker:24.0.7-dind
+      alias: docker
+      command: ["--insecure-registry=192.168.0.114:5000"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
+  before_script:
+    - docker logout 192.168.0.114:5000 || true
+    - echo "1234" | docker login 192.168.0.114:5000 -u admin --password-stdin
+  script:
+    - docker build -t 192.168.0.114:5000/docker-hosted/javid-image:latest .
+    - docker push 192.168.0.114:5000/docker-hosted/javid-image:latest
+
