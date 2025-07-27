@@ -1,0 +1,104 @@
+stages:
+  - sast
+  - sca
+  - build
+  - deploy
+
+snyk_sast_scan:
+  image: node:18-alpine
+  stage: sast
+  tags:
+    - docker
+  before_script:
+    - apk add --no-cache curl
+    - curl -sL https://static.snyk.io/cli/latest/snyk-alpine > /usr/local/bin/snyk
+    - chmod +x /usr/local/bin/snyk
+    - snyk auth 47083ae9-bb80-4cab-aa5a-a842e85ffa43
+  script:
+    - ls -R
+    - snyk code test --json-file-output=snyk.sarif.json --sarif || true
+  after_script:
+    - |
+      curl -s -X POST "https://api.telegram.org/bot8289555316:AAH2Tv0sO34Dec2tLKUqyo6VIDF5CR1NGko/sendMessage" \
+      -d chat_id="6552067429" \
+      -d text="🔍 SAST mərhələsi tamamlandı: $CI_PROJECT_NAME ($CI_COMMIT_BRANCH)"
+  allow_failure: true
+  artifacts:
+    reports:
+      sast: snyk.sarif.json
+    paths:
+      - snyk.sarif.json
+
+snyk_sca_scan:
+  image: node:18-alpine
+  stage: sca
+  tags:
+    - docker
+  before_script:
+    - apk add --no-cache curl
+    - curl -sL https://static.snyk.io/cli/latest/snyk-alpine > /usr/local/bin/snyk
+    - chmod +x /usr/local/bin/snyk
+    - snyk auth 47083ae9-bb80-4cab-aa5a-a842e85ffa43
+  script:
+    - snyk test --all-projects --json > snyk-sca.json || true
+  after_script:
+    - |
+      curl -s -X POST "https://api.telegram.org/bot47083ae9-bb80-4cab-aa5a-a842e85ffa43/sendMessage" \
+      -d chat_id="6552067429" \
+      -d text="📦 SCA mərhələsi tamamlandı: $CI_PROJECT_NAME ($CI_COMMIT_BRANCH)"
+  allow_failure: true
+  artifacts:
+    reports:
+      dependency_scanning: snyk-sca.json
+    paths:
+      - snyk-sca.json
+
+build_and_push:
+  image: docker:24.0.7
+  stage: build
+  tags:
+    - docker
+  services:
+    - name: docker:24.0.7-dind
+      alias: docker
+      command: ["--insecure-registry=192.168.0.114:5000"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
+  before_script:
+    - docker logout 192.168.0.114:5000 || true
+    - echo "1234" | docker login -u admin --password-stdin 192.168.0.114:5000
+  script:
+    - docker build -t 192.168.0.114:5000/docker-hosted/menim-image-tg:latest .
+    - docker push 192.168.0.114:5000/docker-hosted/menim-image-tg:latest
+  after_script:
+    - |
+      curl -s -X POST "https://api.telegram.org/bot8289555316:AAH2Tv0sO34Dec2tLKUqyo6VIDF5CR1NGko/sendMessage" \
+      -d chat_id="6552067429" \
+      -d text="🔧 Build mərhələsi tamamlandı və image push olundu: $CI_PROJECT_NAME"
+
+deploy_job:
+  stage: deploy
+  image: ubuntu:20.04
+  tags:
+    - docker
+  before_script:
+    - apt update && apt install -y openssh-client curl
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H 192.168.0.115 >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh -o StrictHostKeyChecking=no cavid@192.168.0.115 <<EOF
+        echo "1234" | docker login -u admin --password-stdin http://192.168.0.114:5000
+        docker pull 192.168.0.114:5000/docker-hosted/menim-image-tg:latest
+        docker stop my-app2 || true
+        docker rm my-app2 || true
+        docker run -d --name my-app2 -p 8090:80 192.168.0.114:5000/docker-hosted/menim-image-tg:latest
+      EOF
+  after_script:
+    - |
+      curl -s -X POST "https://api.telegram.org/bot8289555316:AAH2Tv0sO34Dec2tLKUqyo6VIDF5CR1NGko/sendMessage" \
+      -d chat_id="6552067429" \
+      -d text="🚀 Deploy mərhələsi uğurla başa çatdı: $CI_PROJECT_NAME"
