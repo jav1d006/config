@@ -1,0 +1,69 @@
+# sast sca container security 
+stages:
+  - sast       # Static Application Security Testing
+  - sca        # Software Composition Analysis
+  - container  # Container security scanning
+  - build      # Docker image build
+  - deploy     # Deployment
+
+snyk_sast_scan:
+  image: node:18-alpine
+  stage: sast
+  tags:
+    - docker
+  before_script:
+    - apk add --no-cache curl
+    - curl -sL https://static.snyk.io/cli/latest/snyk-alpine > /usr/local/bin/snyk
+    - chmod +x /usr/local/bin/snyk
+    - snyk auth 47083ae9-bb80-4cab-aa5a-a842e85ffa43
+  script:
+    - snyk code test --all-projects --sarif > snyk.sarif.json
+  allow_failure: true
+  artifacts:
+    reports:
+      sast: snyk.sarif.json
+    paths:
+      - snyk.sarif.json
+
+snyk_sca_scan:
+  image: node:18-alpine
+  stage: sca
+  tags:
+    - docker
+  before_script:
+    - apk add --no-cache curl
+    - curl -sL https://static.snyk.io/cli/latest/snyk-alpine > /usr/local/bin/snyk
+    - chmod +x /usr/local/bin/snyk
+    - snyk auth 47083ae9-bb80-4cab-aa5a-a842e85ffa43
+  script:
+    - snyk test --all-projects --json > snyk-sca.json
+  allow_failure: true
+  artifacts:
+    reports:
+      dependency_scanning: snyk-sca.json
+    paths:
+      - snyk-sca.json
+
+snyk_container_scan:
+  image: docker:24.0.7
+  stage: container
+  tags:
+    - docker
+  services:
+    - name: docker:24.0.7-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache curl
+    - curl -sL https://static.snyk.io/cli/latest/snyk-alpine > /usr/local/bin/snyk
+    - chmod +x /usr/local/bin/snyk
+    - snyk auth 47083ae9-bb80-4cab-aa5a-a842e85ffa43
+  script:
+    - docker build -t myapp:latest .
+    - snyk test --docker myapp:latest --file=Dockerfile --json > snyk-container.json
+  allow_failure: true
+  artifacts:
+    paths:
+      - snyk-container.json
