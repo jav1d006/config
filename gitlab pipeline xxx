@@ -1,0 +1,42 @@
+stages:
+  - sast       # SAST scan əvvəl
+  - build      # Docker build & push sonra
+  - deploy
+
+snyk_sast_scan:
+  image: node:18-alpine
+  stage: sast
+  tags:
+    - docker
+  before_script:
+    - apk add --no-cache curl
+    - curl -sL https://static.snyk.io/cli/latest/snyk-alpine > /usr/local/bin/snyk
+    - chmod +x /usr/local/bin/snyk
+    - snyk auth 47083ae9-bb80-4cab-aa5a-a842e85ffa43
+  script:
+    - snyk code test --json-file-output=snyk.sarif.json --sarif
+  allow_failure: true
+  artifacts:
+    reports:
+      sast: snyk.sarif.json
+    paths:
+      - snyk.sarif.json
+
+build_and_push:
+  image: docker:24.0.7
+  stage: build
+  tags:
+    - docker
+  services:
+    - name: docker:24.0.7-dind
+      alias: docker
+      command: ["--insecure-registry=192.168.0.114:5000"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
+  before_script:
+    - docker logout 192.168.0.114:5000 || true
+    - echo "1234" | docker login 192.168.0.114:5000 -u admin --password-stdin
+  script:
+    - docker build -t 192.168.0.114:5000/docker-hosted/menim-image-sast:latest .
+    - docker push 192.168.0.114:5000/docker-hosted/menim-image-sast:latest
